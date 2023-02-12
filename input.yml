@@ -5,6 +5,7 @@
   vars:
     defaults:
       server_name: algo
+      provider: local
       ondemand_cellular: false
       ondemand_wifi: false
       dns_adblocking: false
