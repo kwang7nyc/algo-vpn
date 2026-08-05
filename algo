@@ -21,3 +21,19 @@ case "$1" in
 esac
 
 ansible-playbook ${PLAYBOOK} "${ARGS[@]}"
+
+# Stream the generated client configs back over stdout so a caller driving this
+# script over SSH can capture them from the same session, without a separate
+# scp/pull step afterward. Only applies to a fresh install (main.yml), and only
+# when deploying to localhost, since that's the only case with a predictable
+# `configs/localhost` symlink to find the output directory by.
+if [ "$PLAYBOOK" = "main.yml" ]; then
+  REPO_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  CONFIGS_LINK="$REPO_DIR/configs/localhost"
+  if [ -L "$CONFIGS_LINK" ]; then
+    CONFIG_DIR="$(readlink "$CONFIGS_LINK")"
+    echo "===ALGO_CONFIGS_BEGIN:${CONFIG_DIR}==="
+    tar czf - -C "$REPO_DIR/configs" "$CONFIG_DIR" | base64
+    echo "===ALGO_CONFIGS_END==="
+  fi
+fi

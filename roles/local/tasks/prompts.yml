@@ -1,29 +1,8 @@
 ---
-- pause:
-    prompt: "{{ item }}"
-  when: not tests|default(false)|bool
-  tags:
-    - skip_ansible_lint
-  with_items: |
-    https://trailofbits.github.io/algo/deploy-to-ubuntu.html
-
-    Local installation might break your server. Use at your own risk.
-
-    Proceed? Press ENTER to continue or CTRL+C and A to abort...
-
-- pause:
-    prompt: |
-      Enter the IP address of your server: (or use localhost for local installation):
-      [localhost]
-  register: _algo_server
-  when: server is undefined
-
-- name: Set the facts
+- name: Force local installation (this fork always installs to localhost)
   set_fact:
     cloud_instance_ip: >-
-      {% if server is defined %}{{ server }}
-      {%- elif _algo_server.user_input %}{{ _algo_server.user_input }}
-      {%- else %}localhost{% endif %}
+      {% if server is defined %}{{ server }}{% else %}localhost{% endif %}
 
 - block:
     - pause:
@@ -41,16 +20,26 @@
           {%- else %}root{% endif %}
   when: cloud_instance_ip != "localhost"
 
-- pause:
-    prompt: |
-      Enter the public IP address or domain name of your server: (IMPORTANT! This is used to verify the certificate)
-      [{{ cloud_instance_ip }}]
-  register: _endpoint
+- name: Detect the public IP address (used as the certificate's subject alt name)
   when: endpoint is undefined
+  block:
+    - name: Query Azure's instance metadata service
+      uri:
+        url: http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01
+        headers:
+          Metadata: "true"
+        return_content: true
+      register: _azure_imds_ip
+  rescue:
+    - name: Not running on Azure or IMDS unreachable -- fall back to a public IP lookup
+      uri:
+        url: https://api.ipify.org
+        return_content: true
+      register: _fallback_ip
 
 - name: Set the facts
   set_fact:
     IP_subject_alt_name: >-
       {% if endpoint is defined %}{{ endpoint }}
-      {%- elif _endpoint.user_input %}{{ _endpoint.user_input }}
-      {%- else %}{{ cloud_instance_ip }}{% endif %}
+      {%- elif _azure_imds_ip is defined and _azure_imds_ip.content is defined %}{{ _azure_imds_ip.content }}
+      {%- else %}{{ _fallback_ip.content }}{% endif %}
