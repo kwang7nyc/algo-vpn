@@ -23,23 +23,25 @@
 - name: Detect the public IP address (used as the certificate's subject alt name)
   when: endpoint is undefined
   block:
-    - name: Query Azure's instance metadata service
-      uri:
-        url: http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01
-        headers:
-          Metadata: "true"
-        return_content: true
-      register: _azure_imds_ip
-  rescue:
-    - name: Not running on Azure or IMDS unreachable -- fall back to a public IP lookup
+    - name: Look up this host's public IP address
+      # Azure's instance metadata service was tried here first, but its
+      # network/interface/.../publicIpAddress leaf is unreliable for a
+      # Standard-SKU public IP (empirically empty), and querying it without
+      # format=text returns a JSON error body instead of failing cleanly --
+      # which would otherwise flow straight into the cert's subject-alt-name.
+      # A plain external lookup is simpler and was verified to work.
       uri:
         url: https://api.ipify.org
         return_content: true
-      register: _fallback_ip
+      register: _detected_ip
+
+    - name: Sanity-check the detected IP looks like an IPv4 address
+      assert:
+        that: _detected_ip.content is match('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+        fail_msg: "public IP lookup returned something unexpected: {{ _detected_ip.content }}"
 
 - name: Set the facts
   set_fact:
     IP_subject_alt_name: >-
       {% if endpoint is defined %}{{ endpoint }}
-      {%- elif _azure_imds_ip is defined and _azure_imds_ip.content is defined %}{{ _azure_imds_ip.content }}
-      {%- else %}{{ _fallback_ip.content }}{% endif %}
+      {%- else %}{{ _detected_ip.content }}{% endif %}
