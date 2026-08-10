@@ -18,7 +18,7 @@
 - name: Build the mobileconfigs
   template:
     src: mobileconfig.j2
-    dest: "{{ ipsec_config_path }}/apple/{{ item.0 }}.mobileconfig"
+    dest: "{{ ipsec_config_path }}/apple/{{ IP_subject_alt_name }}-{{ item.0 }}.mobileconfig"
     mode: 0600
   with_together:
     - "{{ users }}"
@@ -28,7 +28,7 @@
 - name: Build the client ipsec config file
   template:
     src: client_ipsec.conf.j2
-    dest: "{{ ipsec_config_path }}/manual/{{ item }}.conf"
+    dest: "{{ ipsec_config_path }}/manual/{{ IP_subject_alt_name }}-{{ item }}.conf"
     mode: 0600
   with_items:
     - "{{ users }}"
@@ -36,7 +36,7 @@
 - name: Build the client ipsec secret file
   template:
     src: client_ipsec.secrets.j2
-    dest: "{{ ipsec_config_path }}/manual/{{ item }}.secrets"
+    dest: "{{ ipsec_config_path }}/manual/{{ IP_subject_alt_name }}-{{ item }}.secrets"
     mode: 0600
   with_items:
     - "{{ users }}"
